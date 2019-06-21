@@ -1,0 +1,112 @@
+= Payara Micro 5 - Kubernetes Ready Demo
+
+Small repository that contains code samples for testing the cluster capabilities of Payara Micro 5 when used within a Kubernetes cluster.
+
+== Sample Application
+
+There is a sample application that exposes REST services to interact with cached data of users and simulate intensive CPU usage for the entire runtime in order to demonstrate how Kubernetes autoscaling works.
+
+This application is configured to run using the Payara Micro Maven Plugin. To start the application, simply run:
+
+[source, shell]
+-----
+> mvn clean install
+> mvn payara-micro:start
+-----
+
+== Docker Image
+
+In order to test the application locally, a new Docker image has to be build after having packaged the WAR application:
+
+[source, shell]
+-----
+> docker build -t payara/cluster .
+-----
+
+To test this image, start a new container with the following command:
+
+[source, shell]
+-----
+> docker run -d -p 8080:8080 --name demo-cluster payara/cluster
+-----
+
+== Kubernetes Steps
+
+=== Metrics Server
+
+It is recommended to test the kubernetes arrangement locally using either Docker for Desktop or Minikube. 
+
+Since this demo tests pod-autoscaling via the `HorizontalPodAutoScaler` object, a metrics mechanism has to be configured first in the cluster. The standard `metrics-server` is recommended. Follow these steps:
+
+. Clone the https://github.com/kubernetes-incubator/metrics-server[Metrics Server Project].
+
+. Edit the `${PROJECT_DIR}/deploy/v1.8+/metrics-server-deployment.yaml` file to override the command used to deploy the metrics server and allow it to probe pods in the local cluster:
++
+[source, yaml]
+----
+...
+containers:
+- name: metrics-server
+image: k8s.gcr.io/metrics-server-amd64:v0.3.3
+imagePullPolicy: Always
+command:
+    - /metrics-server
+    - --kubelet-insecure-tls
+    - --kubelet-preferred-address-types=InternalIP
+...
+----
+
+. Create all objects defined in the `deploy/v1.8+/` directory:
++
+[source, shell]
+-----
+> kubectl apply -f ${METRICS_SERVER_PROJECT_DIR}/deploy/v1.8+/
+-----
+
+=== Cluster Setup
+
+All object definitions are located in the `k8s/` directory. Create the following objects in order:
+
+. First create the role binding for the service account named `default` to the `ClusterRole:view` permission:
++
+[source, shell]
+-----
+> kubectl apply -f k8s/rbac.yaml
+-----
+
+. Create the service to allow pods to find each other and allow their Payara Micro instances to cluster:
++
+[source, shell]
+-----
+> kubectl apply -f k8s/demo-service.yaml
+-----
+
+. Create the deployment that will initialize 3 pods:
++
+[source, shell]
+-----
+> kubectl apply -f k8s/demo-deployment.yaml
+-----
+
+. Finally, turn on the auto scaler:
++
+[source, shell]
+-----
+> kubectl apply -f k8s/demo-scaler.yaml
+-----
+
+==== Testing AutoScaling
+
+In order to test auto scaling, you can use the `/simulate/busy` REST endpoint of the application. Since pod endpoints are managed by the `demo-service` service we created previously, there is no way to direct requests to specific pods to trigger this endpoint.
+
+However, you can use the `kubectl port-forward` to remap a pod's exposed port to a port in the local machine to temporarily send a request to this endpoint:
+
+[source, shell]
+-----
+> kubectl port-foward <POD-NAME> <LOCAL_PORT>:8080
+> curl -X POST http://localhost:<LOCAL_PORT>/simulate/busy/start
+-----
+
+NOTE: The second command should run in a separate terminal since the port-forwarding operation runs in the foreground. Once you are done running commands directly to the pod, you can stop this operation.
+
+To signal the Payara Micro instance in the pod to stop the simulated CPU load, simply send a `POST` request to the `/simulate/busy/stop` endpoint.
