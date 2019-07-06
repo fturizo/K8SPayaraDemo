@@ -27,7 +27,7 @@ To test this image, start a new container with the following command:
 
 [source, shell]
 -----
-> docker run -d -p 8080:8080 --name demo-cluster payara/cluster
+> docker run -d -p 8080:8080 --name demo-cluster payara/cluster-demo
 -----
 
 == Kubernetes Steps
