@@ -1,6 +1,6 @@
 #Build into local image named payara/cluster-demo
 
-FROM payara/micro:5.192
+FROM payara/micro:5.193.1
 
 #Install Linux Utilities (for lscpu)
 USER root
