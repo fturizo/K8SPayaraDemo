@@ -5,6 +5,9 @@ metadata:
   labels:
     app: cluster-demo
 spec:
+  securityContext:
+    runAsUser: 1000
+    fsGroup: 1000     
   containers:
   - name: py-micro-demo
     image: payara/cluster-demo
@@ -20,6 +23,9 @@ spec:
         valueFrom:
           fieldRef:
             fieldPath: metadata.name
+#    volumeMounts:
+#      - mountPath: /opt/payara/log-config/
+#        name: config-volume
     args:      
       - "--clustermode"
       - "kubernetes"
@@ -27,7 +33,17 @@ spec:
       - "k8s-$(POD_NAME)"
       - "--clusterName"
       - "demo"
+      - "--logProperties"
+      - "/opt/payara/log-config/logging.properties"
+      - "--enableDynamicLogging"
       - "--deploy"
       - "/opt/payara/deployments/cluster-demo.war"
       - "--contextRoot"
       - "/"
+  volumes:
+    - name: config-volume
+      configMap:
+          name: logging-config
+          items:
+            - key: LOGGING_FILE
+              path: logging.properties

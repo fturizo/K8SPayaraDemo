@@ -2,6 +2,8 @@
 
 Small repository that contains code samples for testing the cluster capabilities of Payara Micro 5 when used within a Kubernetes cluster.
 
+IMPORTANT: This sample project has been tested on Kubernetes version 1.21 and superior
+
 == Sample Application
 
 There is a sample application that exposes REST services to interact with cached data of users and simulate intensive CPU usage for the entire runtime in order to demonstrate how Kubernetes autoscaling works.
@@ -20,47 +22,80 @@ In order to test the application locally, a new Docker image has to be build aft
 
 [source, shell]
 -----
-> docker build -t payara/cluster .
+> docker build -t payara/cluster-demo .
 -----
 
 To test this image, start a new container with the following command:
 
 [source, shell]
 -----
-> docker run -d -p 8080:8080 --name demo-cluster payara/cluster-demo
+> docker run --rm -d -p 8080:8080 --name demo-cluster payara/cluster-demo
 -----
 
 == Kubernetes Steps
 
 === Metrics Server
 
-It is recommended to test the kubernetes arrangement locally using either Docker for Desktop or Minikube. 
+It is recommended to test the Kubernetes cluster locally using either Docker for Desktop or Minikube. 
 
-Since this demo tests pod-autoscaling via the `HorizontalPodAutoScaler` object, a metrics mechanism has to be configured first in the cluster. The standard `metrics-server` is recommended. Follow these steps:
+Since this demo tests pod-autoscaling via a `HorizontalPodAutoScaler, a metrics server has to be configured first. Follow these steps:
 
-. Clone the https://github.com/kubernetes-incubator/metrics-server[Metrics Server Project].
+. Download the latest release of the https://github.com/kubernetes-sigs/metrics-server[Metrics Server] K8S components definition:
++
+[source, shell]
+----
+curl https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+----
 
-. Edit the `${PROJECT_DIR}/deploy/v1.8+/metrics-server-deployment.yaml` file to override the command used to deploy the metrics server and allow it to probe pods in the local cluster:
+. Edit the YAML definition file to configure insecure TLS communication to the kubelets (Only done since this is a local test):
 +
 [source, yaml]
 ----
 ...
-containers:
-- name: metrics-server
-image: k8s.gcr.io/metrics-server-amd64:v0.3.3
-imagePullPolicy: Always
-command:
-    - /metrics-server
-    - --kubelet-insecure-tls
-    - --kubelet-preferred-address-types=InternalIP
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    k8s-app: metrics-server
+  name: metrics-server
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      k8s-app: metrics-server
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        k8s-app: metrics-server
+    spec:
+      containers:
+      - args:
+        - --cert-dir=/tmp
+        - --secure-port=4443
+        - --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname
+        - --kubelet-use-node-status-port
+        - --kubelet-insecure-tls # <-- ADD THIS LINE
+        - --metric-resolution=15s
+        image: k8s.gcr.io/metrics-server/metrics-server:v0.6.0
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /livez
+            port: https
+            scheme: HTTPS
+          periodSeconds: 10
 ...
 ----
 
-. Create all objects defined in the `deploy/v1.8+/` directory:
+. Create the K8S components needed to establish the metrics server:
 +
 [source, shell]
 -----
-> kubectl apply -f ${METRICS_SERVER_PROJECT_DIR}/deploy/v1.8+/
+> kubectl apply -f components.yaml
 -----
 
 === Cluster Setup
@@ -103,7 +138,7 @@ However, you can use the `kubectl port-forward` to remap a pod's exposed port to
 
 [source, shell]
 -----
-> kubectl port-foward <POD-NAME> <LOCAL_PORT>:8080
+> kubectl port-forward <POD-NAME> <LOCAL_PORT>:8080
 > curl -X POST http://localhost:<LOCAL_PORT>/simulate/busy/start
 -----
 

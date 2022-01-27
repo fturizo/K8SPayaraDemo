@@ -1,2 +1,4 @@
 target/
 payara-micro-*
+.settings/
+k8s/ms-components.yaml
