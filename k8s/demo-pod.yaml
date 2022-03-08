@@ -9,41 +9,12 @@ spec:
     runAsUser: 1000
     fsGroup: 1000     
   containers:
-  - name: py-micro-demo
-    image: payara/cluster-demo
+  - name: py-server-demo
+    image: payara/server-cluster-demo
     imagePullPolicy: Never
     resources:
       limits:
-        memory: "512M"
+        memory: "1024M"
         cpu: "2"
     ports:
       - containerPort: 8080
-    env:
-      - name: POD_NAME
-        valueFrom:
-          fieldRef:
-            fieldPath: metadata.name
-#    volumeMounts:
-#      - mountPath: /opt/payara/log-config/
-#        name: config-volume
-    args:      
-      - "--clustermode"
-      - "kubernetes"
-      - "--name"
-      - "k8s-$(POD_NAME)"
-      - "--clusterName"
-      - "demo"
-      - "--logProperties"
-      - "/opt/payara/log-config/logging.properties"
-      - "--enableDynamicLogging"
-      - "--deploy"
-      - "/opt/payara/deployments/cluster-demo.war"
-      - "--contextRoot"
-      - "/"
-  volumes:
-    - name: config-volume
-      configMap:
-          name: logging-config
-          items:
-            - key: LOGGING_FILE
-              path: logging.properties
